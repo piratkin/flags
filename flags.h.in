@@ -1,0 +1,57 @@
+#pragma once
+#include <cstdint> /* int32_t uint32_t int64_t uint64_t */
+#include <string> /* string */
+#include <functional> /* function */
+#include <optional> /* optional */
+#include <stdexcept> /* invalid_argument */
+
+#define DECLARE(TYPE, NAME)  extern Flags<TYPE> NAME
+#define DECLARE_bool(NAME)   DECLARE(bool, NAME)
+#define DECLARE_int(NAME)    DECLARE(int, NAME)
+#define DECLARE_int32(NAME)  DECLARE(int32_t, NAME)
+#define DECLARE_uint32(NAME) DECLARE(uint32_t, NAME)
+#define DECLARE_int64(NAME)  DECLARE(int64_t, NAME)
+#define DECLARE_uint64(NAME) DECLARE(uint64_t, NAME)
+#define DECLARE_double(NAME) DECLARE(double, NAME)
+#define DECLARE_string(NAME) DECLARE(std::string, NAME)
+
+template<class T>
+class Flags {
+private:
+    T _flag;
+    std::string _key, _desc;
+    std::optional<std::function<bool(T flag)>> _check;
+    void _update(T flag, bool mute = true) {
+        if (_check.has_value() == true &&
+            _check.value()(flag) == false) {
+            if (mute == true) return;
+            throw std::invalid_argument(
+                "Default value is unalowable!");
+        }
+        _flag = flag;
+    }
+public:
+    Flags(T flag) : _flag(flag) {}
+    Flags(std::string key, T flag, std::string desc = "")
+        : _key(key), _flag(flag), _desc(desc) {}
+    Flags(std::string key, T flag, std::function<bool(T flag)> check, 
+        std::string desc = "") : Flags(key, flag, desc) {
+        _check = check;
+        _update(flag, false);
+    }
+    const T& operator()() {
+        return _flag;
+    }
+    Flags& operator=(const T flag) {
+        _update(flag);
+        return *this;
+    }
+};
+
+template<class T> Flags(std::string, T, ...) -> Flags<T>;
+template<class T> Flags(T) -> Flags<T>;
+Flags(std::string, char const*, ...) -> Flags<std::string>;
+Flags(char const*) -> Flags<std::string>;
+
+inline Flags PROGECT_NAME("@DEFAULT_PROJECT_NAME@");
+inline Flags PROGECT_VERSION("@DEFAULT_PROJECT_VERSION@");
