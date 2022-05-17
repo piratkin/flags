@@ -1,9 +1,18 @@
 #pragma once
 #include <cstdint> /* int32_t uint32_t int64_t uint64_t */
-#include <string> /* string */
+#include <string> /* string stof stod stold stol stoll stoi stoul stoull */
+#include <cstring> /* strncmp */
 #include <functional> /* function */
 #include <optional> /* optional */
 #include <stdexcept> /* invalid_argument */
+#include <map> /* map */
+#include <any> /* any */
+#include <span> /* span */
+#include <regex> /* regex_match regex smatch */
+#include <type_traits> /* is_same_v */
+#include <cctype> /* tolower */
+#include <algorithm> /* transform */
+#include <mutex> /* mutex scoped_lock */
 
 #define DECLARE(TYPE, NAME)  extern Flags<TYPE> NAME
 #define DECLARE_bool(NAME)   DECLARE(bool, NAME)
@@ -15,13 +24,57 @@
 #define DECLARE_double(NAME) DECLARE(double, NAME)
 #define DECLARE_string(NAME) DECLARE(std::string, NAME)
 
+class IFlags {
+
+protected:
+    virtual ~IFlags() {}
+    virtual void set(std::string s) = 0;
+
+    inline static std::mutex _m;
+    inline static std::map<std::string,
+        std::any> _cache;
+
+public:
+    static void parse(int size, char** args) {
+        std::scoped_lock<std::mutex> lock(IFlags::_m);
+        for (int i = 1; i < size; ++i) {
+            if (::strlen(args[i]) <= 2 ||
+                ::strncmp(args[i], "--", 2) != 0) {
+                throw std::invalid_argument("Error: " + 
+                    std::string(args[i]));
+            }
+            std::smatch match;
+            if (const std::string arg(&args[i][2]);
+                std::regex_match(arg, match,
+                    std::regex{ R"(^([^=]+)=(.+)$)" }) == true ||
+                match.size() == 3) {
+                if (_cache.contains(match[1].str()) == false) {
+                    throw std::invalid_argument("Not found: " + 
+                        std::string(args[i]));
+                }
+                try {
+                    std::any_cast<IFlags*>(
+                        _cache[match[1].str()])->set(match[2].str());
+                } catch (...) {
+                    throw std::invalid_argument("Error assign: " + 
+                        std::string(args[i]));  
+                }
+            } else {
+                throw std::invalid_argument("Error parse: " + 
+                    std::string(args[i]));
+            }
+        }
+    }
+};
+
 template<class T>
-class Flags {
+class Flags : public IFlags {
 private:
     T _flag;
     std::string _key, _desc;
     std::optional<std::function<bool(T flag)>> _check;
     void _update(T flag, bool mute = true) {
+        std::scoped_lock<std::mutex> lock(IFlags::_m);
         if (_check.has_value() == true &&
             _check.value()(flag) == false) {
             if (mute == true) return;
@@ -30,16 +83,62 @@ private:
         }
         _flag = flag;
     }
+    void set(std::string s) {
+        auto __tolower = [](std::string s) -> std::string {
+            std::transform(s.begin(), s.end(), s.begin(), 
+                [](unsigned char c){ return std::tolower(c); });
+            return s;
+        };
+        if constexpr (std::is_same_v<T,
+        std::string>) {
+            _flag = s;        
+        } else if (std::is_same_v<T, bool>) {
+            _flag = true;
+            if (std::string _s = __tolower(s);
+                _s.empty() == true ||
+                _s == "0" || _s == "false") {
+                _flag = false;
+            }
+        } else if (std::is_same_v<T, float>) {
+            _flag = std::stof(s);
+        } else if (std::is_same_v<T, double>) {
+            _flag = std::stod(s);
+        } else if (std::is_same_v<T, long double>) {
+            _flag = std::stold(s);
+        } else if (std::is_same_v<T, int>) {
+            _flag = std::stoi(s, nullptr, 0);
+        } else if (std::is_same_v<T, long>) {
+            _flag = std::stol(s, nullptr, 0);
+        } else if (std::is_same_v<T, long long>) {
+            _flag = std::stoll(s, nullptr, 0);
+        } else if (std::is_same_v<T, unsigned int> ||
+            std::is_same_v<T, unsigned long>) {
+            _flag = std::stoul(s, nullptr, 0);
+        } else if (std::is_same_v<T,
+            unsigned long long>) {
+            _flag = std::stoull(s, nullptr, 0);
+        }
+    }
+    
 public:
     Flags(T flag) : _flag(flag) {}
     Flags(std::string key, T flag, std::string desc = "")
-        : _key(key), _flag(flag), _desc(desc) {}
-    Flags(std::string key, T flag, std::function<bool(T flag)> check, 
+        : _key(key), _flag(flag), _desc(desc) {
+        std::scoped_lock<std::mutex> lock(IFlags::_m);
+        if (key.empty() == true && 
+            _cache.contains(key) == true) {
+            throw std::invalid_argument(
+                "Empty or similar key!");
+        }
+        _cache.emplace(key, (IFlags*)this);
+    }
+    Flags(std::string key, T flag, std::function<bool(T flag)> check,
         std::string desc = "") : Flags(key, flag, desc) {
         _check = check;
         _update(flag, false);
     }
     const T& operator()() {
+        std::scoped_lock<std::mutex> lock(IFlags::_m);
         return _flag;
     }
     Flags& operator=(const T flag) {
