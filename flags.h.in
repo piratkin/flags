@@ -92,29 +92,29 @@ private:
         if constexpr (std::is_same_v<T,
         std::string>) {
             _flag = s;        
-        } else if (std::is_same_v<T, bool>) {
+        } else if constexpr (std::is_same_v<T, bool>) {
             _flag = true;
             if (std::string _s = __tolower(s);
                 _s.empty() == true ||
                 _s == "0" || _s == "false") {
                 _flag = false;
             }
-        } else if (std::is_same_v<T, float>) {
+        } else if constexpr (std::is_same_v<T, float>) {
             _flag = std::stof(s);
-        } else if (std::is_same_v<T, double>) {
+        } else if constexpr (std::is_same_v<T, double>) {
             _flag = std::stod(s);
-        } else if (std::is_same_v<T, long double>) {
+        } else if constexpr (std::is_same_v<T, long double>) {
             _flag = std::stold(s);
-        } else if (std::is_same_v<T, int>) {
+        } else if constexpr (std::is_same_v<T, int>) {
             _flag = std::stoi(s, nullptr, 0);
-        } else if (std::is_same_v<T, long>) {
+        } else if constexpr (std::is_same_v<T, long>) {
             _flag = std::stol(s, nullptr, 0);
-        } else if (std::is_same_v<T, long long>) {
+        } else if constexpr (std::is_same_v<T, long long>) {
             _flag = std::stoll(s, nullptr, 0);
-        } else if (std::is_same_v<T, unsigned int> ||
+        } else if constexpr (std::is_same_v<T, unsigned int> ||
             std::is_same_v<T, unsigned long>) {
             _flag = std::stoul(s, nullptr, 0);
-        } else if (std::is_same_v<T,
+        } else if constexpr (std::is_same_v<T,
             unsigned long long>) {
             _flag = std::stoull(s, nullptr, 0);
         }
