@@ -8,21 +8,38 @@
 #include <map> /* map */
 #include <any> /* any */
 #include <span> /* span */
-#include <regex> /* regex_match regex smatch */
+#include <regex> /* regex_replace regex_match */
 #include <type_traits> /* is_same_v */
 #include <cctype> /* tolower */
-#include <algorithm> /* transform */
 #include <mutex> /* mutex scoped_lock */
+#include <regex> /* regex_replace */
+#include <algorithm> /* transform */
 
 #define DECLARE(TYPE, NAME)  extern Flags<TYPE> NAME
 #define DECLARE_bool(NAME)   DECLARE(bool, NAME)
 #define DECLARE_int(NAME)    DECLARE(int, NAME)
 #define DECLARE_int32(NAME)  DECLARE(int32_t, NAME)
+#define DECLARE_uint8(NAME) DECLARE(uint8_t, NAME)
+#define DECLARE_uint16(NAME) DECLARE(uint16_t, NAME)
 #define DECLARE_uint32(NAME) DECLARE(uint32_t, NAME)
 #define DECLARE_int64(NAME)  DECLARE(int64_t, NAME)
 #define DECLARE_uint64(NAME) DECLARE(uint64_t, NAME)
 #define DECLARE_double(NAME) DECLARE(double, NAME)
 #define DECLARE_string(NAME) DECLARE(std::string, NAME)
+
+#define _STRINGIFY(x) #x
+#define STRINGIFY(x) _STRINGIFY(x)
+
+#define FLAGS_bool(N, ...) Flags<bool> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_int(N, ...) Flags<int> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_uint8(N, ...) Flags<uint8_t> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_uint16(N, ...) Flags<uint16_t> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_uint32(N, ...) Flags<uint32_t> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_int32(N, ...) Flags<int32_t> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_uint64(N, ...) Flags<uint64_t> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_int64(N, ...) Flags<int64_t> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_double(N, ...) Flags<double> N(STRINGIFY(N), __VA_ARGS__)
+#define FLAGS_string(N, ...) Flags<std::string> N(STRINGIFY(N), __VA_ARGS__)
 
 class IFlags {
 
@@ -79,26 +96,16 @@ private:
             _check.value()(flag) == false) {
             if (mute == true) return;
             throw std::invalid_argument(
-                "Default value is unalowable!");
+                "Default value `" + _key + "` is unalowable!");
         }
         _flag = flag;
     }
     void set(std::string s) {
-        auto __tolower = [](std::string s) -> std::string {
-            std::transform(s.begin(), s.end(), s.begin(), 
-                [](unsigned char c){ return std::tolower(c); });
-            return s;
-        };
-        if constexpr (std::is_same_v<T,
-        std::string>) {
+        if constexpr (std::is_same_v<T, std::string>) {
             _flag = s;        
         } else if constexpr (std::is_same_v<T, bool>) {
-            _flag = true;
-            if (std::string _s = __tolower(s);
-                _s.empty() == true ||
-                _s == "0" || _s == "false") {
-                _flag = false;
-            }
+            std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+            _flag = !(s.empty() == true || s == "0" || s == "false");
         } else if constexpr (std::is_same_v<T, float>) {
             _flag = std::stof(s);
         } else if constexpr (std::is_same_v<T, double>) {
@@ -119,11 +126,22 @@ private:
             _flag = std::stoull(s, nullptr, 0);
         }
     }
-    
+
+    std::string camel_to_hyphen(std::string s) {
+        s = std::regex_replace(s,
+            std::regex {"([a-z0-9])([A-Z])"}, "$1-$2");
+        s = std::regex_replace(s,
+            std::regex {"_"}, "-");
+        std::transform(s.begin(), s.end(),
+            s.begin(), ::tolower);
+        return s;
+    }
+
 public:
     Flags(T flag) : _flag(flag) {}
     Flags(std::string key, T flag, std::string desc = "")
-        : _key(key), _flag(flag), _desc(desc) {
+        : _flag(flag), _desc(desc) {
+        key = camel_to_hyphen(key);
         std::scoped_lock<std::mutex> lock(IFlags::_m);
         if (key.empty() == true && 
             _cache.contains(key) == true) {
@@ -132,8 +150,10 @@ public:
         }
         _cache.emplace(key, (IFlags*)this);
     }
-    Flags(std::string key, T flag, std::function<bool(T flag)> check,
-        std::string desc = "") : Flags(key, flag, desc) {
+    Flags(std::string key, T flag,
+        std::function<bool(T flag)> check,
+        std::string desc = "") :
+        Flags(key, flag, desc) {
         _check = check;
         _update(flag, false);
     }
