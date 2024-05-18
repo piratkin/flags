@@ -172,5 +172,5 @@ template<class T> Flags(T) -> Flags<T>;
 Flags(std::string, char const*, ...) -> Flags<std::string>;
 Flags(char const*) -> Flags<std::string>;
 
-inline Flags PROGECT_NAME("@DEFAULT_PROJECT_NAME@");
-inline Flags PROGECT_VERSION("@DEFAULT_PROJECT_VERSION@");
+inline Flags PROJNAME("@DEFAULT_PROJECT_NAME@");
+inline Flags PROJVERSION("@DEFAULT_PROJECT_VERSION@");
